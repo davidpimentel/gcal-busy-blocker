@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/davidpimentel/calendar-sync/config"
 	"google.golang.org/api/calendar/v3"
 )
 
@@ -18,8 +17,10 @@ type SyncClient struct {
 }
 
 const (
-	defaultCalendar      = "primary"
-	propertyAppNameValue = "true"
+	appName                  = "calendar-sync"
+	defaultCalendar          = "primary"
+	propertyAppNameValue     = "true"
+	sourceEventIdPropertyKey = "calendar-sync-source-event-id"
 )
 
 func (s *SyncClient) RunSync() {
@@ -42,7 +43,7 @@ func (s *SyncClient) RunSync() {
 
 	fmt.Printf("Found %d events in source calendar\n", len(sourceEvents))
 
-	existingDestinationEvents := fetchEvents(s.DestinationCalendarService, now, endTime, map[string]string{config.AppName: "true"})
+	existingDestinationEvents := fetchEvents(s.DestinationCalendarService, now, endTime, map[string]string{appName: "true"})
 
 	for _, event := range sourceEvents {
 		fmt.Printf("Event: %s (%s)\n", event.Summary, event.Id)
@@ -100,8 +101,8 @@ func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
 		// Add extended properties to track the source event
 		ExtendedProperties: &calendar.EventExtendedProperties{
 			Private: map[string]string{
-				config.AppName:                  propertyAppNameValue,
-				config.SourceEventIdPropertyKey: sourceEvent.Id,
+				appName:                  propertyAppNameValue,
+				sourceEventIdPropertyKey: sourceEvent.Id,
 			},
 		},
 	}
@@ -110,7 +111,7 @@ func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
 func eventAlreadyExists(destinationEvents []*calendar.Event, sourceEventID string) bool {
 	for _, event := range destinationEvents {
 		if event.ExtendedProperties != nil && event.ExtendedProperties.Private != nil {
-			if event.ExtendedProperties.Private[config.SourceEventIdPropertyKey] == sourceEventID {
+			if event.ExtendedProperties.Private[sourceEventIdPropertyKey] == sourceEventID {
 				return true
 			}
 		}
