@@ -17,13 +17,13 @@ func RunSync() {
 	fmt.Println("Starting calendar sync...")
 
 	// Get source client
-	sourceClient, err := auth.GetClient(config.SourceTokenFile, config.SourceScope)
+	sourceClient, err := auth.SourceClient()
 	if err != nil {
 		log.Fatalf("Unable to get source client: %v", err)
 	}
 
 	// Get destination client
-	destClient, err := auth.GetClient(config.DestTokenFile, config.DestinationScope)
+	destClient, err := auth.DestinationClient()
 	if err != nil {
 		log.Fatalf("Unable to get destination client: %v", err)
 	}

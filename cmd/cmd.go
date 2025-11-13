@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/davidpimentel/calendar-sync/auth"
-	"github.com/davidpimentel/calendar-sync/config"
 	"github.com/davidpimentel/calendar-sync/sync"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +30,7 @@ var (
 		Short: "Login to source Google Calendar",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Authenticating source calendar account...")
-			auth.GetTokenFromWeb(config.SourceTokenFile, config.SourceScope)
+			auth.GetSourceTokenFromWeb()
 		},
 	}
 
@@ -41,7 +40,7 @@ var (
 		Short: "Login to destination Google Calendar",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Authenticating destination calendar account...")
-			auth.GetTokenFromWeb(config.DestTokenFile, config.DestinationScope)
+			auth.GetDestinationTokenFromWeb()
 		},
 	}
 

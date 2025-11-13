@@ -10,10 +10,19 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/calendar/v3"
 )
 
 const (
 	credentialsFile = "credentials.json"
+	sourceTokenFile = "source_token.json"
+	destTokenFile   = "destination_token.json"
+)
+
+// Google Calendar permission scopes
+var (
+	sourceScope      = []string{calendar.CalendarReadonlyScope, calendar.CalendarEventsReadonlyScope}
+	destinationScope = []string{calendar.CalendarScope}
 )
 
 func getOauthConfig(scope []string) *oauth2.Config {
@@ -29,7 +38,15 @@ func getOauthConfig(scope []string) *oauth2.Config {
 	return config
 }
 
-func GetClient(tokenFile string, scope []string) (*http.Client, error) {
+func SourceClient() (*http.Client, error) {
+	return getClient(sourceTokenFile, sourceScope)
+}
+
+func DestinationClient() (*http.Client, error) {
+	return getClient(destTokenFile, destinationScope)
+}
+
+func getClient(tokenFile string, scope []string) (*http.Client, error) {
 	config := getOauthConfig(scope)
 
 	tok, err := tokenFromFile(tokenFile)
@@ -40,7 +57,15 @@ func GetClient(tokenFile string, scope []string) (*http.Client, error) {
 	return config.Client(context.Background(), tok), nil
 }
 
-func GetTokenFromWeb(tokenFile string, scope []string) {
+func GetSourceTokenFromWeb() {
+	getTokenFromWeb(sourceTokenFile, sourceScope)
+}
+
+func GetDestinationTokenFromWeb() {
+	getTokenFromWeb(destTokenFile, destinationScope)
+}
+
+func getTokenFromWeb(tokenFile string, scope []string) {
 	config := getOauthConfig(scope)
 
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
