@@ -1,130 +1,110 @@
 package sync
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/davidpimentel/calendar-sync/auth"
 	"github.com/davidpimentel/calendar-sync/config"
 	"google.golang.org/api/calendar/v3"
-	"google.golang.org/api/option"
 )
 
-func RunSync() {
+type SyncClient struct {
+	SourceCalendarService      *calendar.Service
+	DestinationCalendarService *calendar.Service
+	DaysAhead                  int
+	DryRun                     bool
+}
+
+const (
+	defaultCalendar      = "primary"
+	propertyAppNameValue = "true"
+)
+
+func (s *SyncClient) RunSync() {
 	fmt.Println("Starting calendar sync...")
-
-	// Get source client
-	sourceClient, err := auth.SourceClient()
-	if err != nil {
-		log.Fatalf("Unable to get source client: %v", err)
-	}
-
-	// Get destination client
-	destClient, err := auth.DestinationClient()
-	if err != nil {
-		log.Fatalf("Unable to get destination client: %v", err)
-	}
-
-	// Create calendar service for source and destination
-	sourceSrv, err := calendar.NewService(context.Background(), option.WithHTTPClient(sourceClient))
-	if err != nil {
-		log.Fatalf("Unable to retrieve source Calendar client: %v", err)
-	}
-
-	destSrv, err := calendar.NewService(context.Background(), option.WithHTTPClient(destClient))
-	if err != nil {
-		log.Fatalf("Unable to retrieve destination Calendar client: %v", err)
-	}
 
 	// Get events from source calendar
 	now := time.Now().Format(time.RFC3339)
-	// oneMonthFromNow := time.Now().AddDate(0, 1, 0).Format(time.RFC3339)
-	oneDayFromNow := time.Now().AddDate(0, 0, 1).Format(time.RFC3339)
+	endTime := time.Now().AddDate(0, 0, s.DaysAhead).Format(time.RFC3339)
 
 	fmt.Println("Fetching events from source calendar...")
-	fmt.Printf("Time range: %s to %s\n", now, oneDayFromNow)
-
-	// Get primary calendar for source
-	sourceCalendar, err := sourceSrv.Calendars.Get("primary").Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve source calendar: %v", err)
-	}
+	fmt.Printf("Time range: %s to %s\n", now, endTime)
 
 	// List events from source calendar
-	events, err := sourceSrv.Events.List("primary").
-		TimeMin(now).
-		TimeMax(oneDayFromNow).
-		SingleEvents(true).
-		OrderBy("startTime").
-		Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve events from source calendar: %v", err)
-	}
+	sourceEvents := fetchEvents(s.SourceCalendarService, now, endTime, map[string]string{})
 
-	if len(events.Items) == 0 {
+	if len(sourceEvents) == 0 {
 		fmt.Println("No upcoming events found in source calendar.")
 		return
 	}
 
-	fmt.Printf("Found %d events in source calendar\n", len(events.Items))
+	fmt.Printf("Found %d events in source calendar\n", len(sourceEvents))
 
-	// Get any and all events from the destination calendar that we've created
-	destinationEvents, err := destSrv.Events.List("primary").
-		TimeMin(now).
-		TimeMax(oneDayFromNow).
-		PrivateExtendedProperty(fmt.Sprintf("%s=%s", config.AppName, "true")).
-		SingleEvents(true).
-		OrderBy("startTime").
-		Do()
+	existingDestinationEvents := fetchEvents(s.DestinationCalendarService, now, endTime, map[string]string{config.AppName: "true"})
 
-	if err != nil {
-		log.Fatalf("Unable to retrieve existing events from destination calendar: %v", err)
-	}
-
-	// Process each event
-	for _, event := range events.Items {
+	for _, event := range sourceEvents {
 		fmt.Printf("Event: %s (%s)\n", event.Summary, event.Id)
 
-		if eventAlreadyExists(destinationEvents.Items, event.Id) {
+		if eventAlreadyExists(existingDestinationEvents, event.Id) {
 			fmt.Printf("Event already synced: %s\n", event.Id)
 		} else {
-			// Create a new event in the destination calendar
-			newEvent := &calendar.Event{
-				ColorId:     "4",
-				Summary:     "Busy",
-				Description: "Created with calendar-sync",
-				Start:       event.Start,
-				End:         event.End,
-				// Add extended properties to track the source event
-				ExtendedProperties: &calendar.EventExtendedProperties{
-					Private: map[string]string{
-						config.AppName:                   "true",
-						config.SourceEventIdPropertyKey:  event.Id,
-						config.SourceCalendarPropertyKey: sourceCalendar.Id,
-					},
-				},
-			}
+			newEvent := createDestinationEvent(event)
 
-			// Insert the event
 			fmt.Printf("Creating new event: %s\n", newEvent.Summary)
-			b, err := json.MarshalIndent(newEvent, "", "  ")
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Print(string(b))
 
-			_, err = destSrv.Events.Insert("primary", newEvent).Do()
-			if err != nil {
-				log.Printf("Error creating event: %v", err)
-				continue
+			if s.DryRun {
+				b, err := json.MarshalIndent(newEvent, "", "  ")
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Print(string(b))
+			} else {
+				_, err := s.DestinationCalendarService.Events.Insert("primary", newEvent).Do()
+				if err != nil {
+					log.Printf("Error creating event: %v", err)
+					continue
+				}
 			}
 		}
 	}
 
 	fmt.Println("Sync completed successfully")
+}
+
+func fetchEvents(calendarService *calendar.Service, startTime string, endTime string, privateProperies map[string]string) []*calendar.Event {
+	eventListCall := calendarService.Events.List(defaultCalendar).
+		TimeMin(startTime).
+		TimeMax(endTime).
+		SingleEvents(true).
+		OrderBy("startTime")
+
+	for key, value := range privateProperies {
+		eventListCall = eventListCall.PrivateExtendedProperty(fmt.Sprintf("%s=%s", key, value))
+	}
+	events, err := eventListCall.Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve events from source calendar: %v", err)
+	}
+	return events.Items
+}
+
+func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
+	return &calendar.Event{
+		ColorId:     "4",
+		Summary:     "Busy",
+		Description: "Created with calendar-sync",
+		Start:       sourceEvent.Start,
+		End:         sourceEvent.End,
+		// Add extended properties to track the source event
+		ExtendedProperties: &calendar.EventExtendedProperties{
+			Private: map[string]string{
+				config.AppName:                  propertyAppNameValue,
+				config.SourceEventIdPropertyKey: sourceEvent.Id,
+			},
+		},
+	}
 }
 
 func eventAlreadyExists(destinationEvents []*calendar.Event, sourceEventID string) bool {
