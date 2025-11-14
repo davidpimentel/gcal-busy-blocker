@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/davidpimentel/gcal-busy-blocker/auth"
-	"github.com/davidpimentel/gcal-busy-blocker/sync"
+	"github.com/davidpimentel/gcal-busy-blocker/internal/auth"
+	"github.com/davidpimentel/gcal-busy-blocker/internal/sync"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
