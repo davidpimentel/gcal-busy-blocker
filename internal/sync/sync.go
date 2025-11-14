@@ -13,8 +13,8 @@ import (
 )
 
 type SyncClient struct {
-	SourceCalendarService      *calendar.Service
-	DestinationCalendarService *calendar.Service
+	SourceCalendarService      CalendarEventsService
+	DestinationCalendarService CalendarEventsService
 }
 
 const (
@@ -50,8 +50,8 @@ func NewSyncClient() *SyncClient {
 	}
 
 	return &SyncClient{
-		SourceCalendarService:      sourceSrv,
-		DestinationCalendarService: destSrv,
+		SourceCalendarService:      &calendarEventsService{service: sourceSrv},
+		DestinationCalendarService: &calendarEventsService{service: destSrv},
 	}
 }
 
@@ -97,7 +97,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) {
 				}
 				fmt.Print(string(b))
 			} else {
-				_, err := s.DestinationCalendarService.Events.Insert("primary", newEvent).Do()
+				_, err := s.DestinationCalendarService.Insert("primary", newEvent).Do()
 				if err != nil {
 					log.Printf("Error creating event: %v", err)
 					continue
@@ -110,40 +110,19 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) {
 }
 
 func (s *SyncClient) fetchBusyBlockEvents(startTime string, endTime string) []*calendar.Event {
-	return fetchEvents(s.DestinationCalendarService, startTime, endTime, map[string]string{appName: propertyAppNameValue})
+	events, err := s.DestinationCalendarService.List(defaultCalendar, startTime, endTime, map[string]string{appName: propertyAppNameValue})
+	if err != nil {
+		log.Fatalf("Unable to fetch destination calendar events: %v", err)
+	}
+	return events
 }
 
 func (s *SyncClient) fetchSourceEvents(startTime string, endTime string) []*calendar.Event {
-	return fetchEvents(s.SourceCalendarService, startTime, endTime, nil)
-}
-
-func fetchEvents(calendarService *calendar.Service, startTime string, endTime string, privateProperies map[string]string) []*calendar.Event {
-	eventListCall := calendarService.Events.List(defaultCalendar).
-		SingleEvents(true).
-		OrderBy("startTime")
-
-	if startTime != "" {
-		eventListCall = eventListCall.TimeMin(startTime)
-	}
-
-	if endTime != "" {
-		eventListCall = eventListCall.TimeMax(endTime)
-	}
-
-	for key, value := range privateProperies {
-		eventListCall = eventListCall.PrivateExtendedProperty(fmt.Sprintf("%s=%s", key, value))
-	}
-	allEvents := []*calendar.Event{}
-
-	err := eventListCall.Pages(context.Background(), func(events *calendar.Events) error {
-		allEvents = append(allEvents, events.Items...)
-		return nil
-	})
-
+	events, err := s.SourceCalendarService.List(defaultCalendar, startTime, endTime, nil)
 	if err != nil {
-		log.Fatalf("Error fetching events from calendar: %v", err)
+		log.Fatalf("Unable to fetch source calendar events: %v", err)
 	}
-	return allEvents
+	return events
 }
 
 func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
@@ -186,7 +165,7 @@ func (s *SyncClient) Clean(dryRun bool) {
 			fmt.Printf("DRY RUN - Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
 		} else {
 			fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
-			err := s.DestinationCalendarService.Events.Delete(defaultCalendar, event.Id).Do()
+			err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id).Do()
 			if err != nil {
 				log.Fatalf("Error deleting event %s: %v", event.Id, err)
 			}
