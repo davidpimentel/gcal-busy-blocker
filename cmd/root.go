@@ -9,7 +9,7 @@ import (
 
 var (
 	RootCmd = &cobra.Command{
-		Use:   "calendar-sync",
+		Use:   "gcal-busy-blocker",
 		Short: "Copy event blocks from one Google calendar to another",
 		Long:  `A CLI tool to sync events from a source Google Calendar to a destination Google Calendar in order to accurately reflect your availability.`,
 	}

@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/davidpimentel/calendar-sync/auth"
+	"github.com/davidpimentel/gcal-busy-blocker/auth"
 	"github.com/spf13/cobra"
 )
 

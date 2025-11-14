@@ -1,4 +1,4 @@
-module github.com/davidpimentel/calendar-sync
+module github.com/davidpimentel/gcal-busy-blocker
 
 go 1.24.4
 

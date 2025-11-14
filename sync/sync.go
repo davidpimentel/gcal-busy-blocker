@@ -17,10 +17,10 @@ type SyncClient struct {
 }
 
 const (
-	appName                  = "calendar-sync"
+	appName                  = "gcal-busy-blocker"
 	defaultCalendar          = "primary"
 	propertyAppNameValue     = "true"
-	sourceEventIdPropertyKey = "calendar-sync-source-event-id"
+	sourceEventIdPropertyKey = "gcal-busy-blocker-source-event-id"
 )
 
 func (s *SyncClient) RunSync() {
@@ -95,7 +95,7 @@ func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
 	return &calendar.Event{
 		ColorId:     "4",
 		Summary:     "Busy",
-		Description: "Created with calendar-sync",
+		Description: "Created with <a href=\"https://github.com/davidpimentel/gcal-busy-blocker\">gcal-busy-blocker</a>. User has a personal commitment and is busy at this time. Please find another time to avoid scheduling conflicts.",
 		Start:       sourceEvent.Start,
 		End:         sourceEvent.End,
 		// Add extended properties to track the source event
@@ -104,6 +104,10 @@ func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
 				appName:                  propertyAppNameValue,
 				sourceEventIdPropertyKey: sourceEvent.Id,
 			},
+		},
+		Source: &calendar.EventSource{
+			Title: "gcal-busy-blocker",
+			Url:   "https://github.com/davidpimentel/gcal-busy-blocker",
 		},
 	}
 }
