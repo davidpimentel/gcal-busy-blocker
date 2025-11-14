@@ -5,21 +5,12 @@ import (
 	"fmt"
 
 	"google.golang.org/api/calendar/v3"
-	"google.golang.org/api/googleapi"
 )
 
 type CalendarEventsService interface {
 	List(calendarId string, startTime string, endTime string, privateProperties map[string]string) ([]*calendar.Event, error)
-	Insert(calendarId string, event *calendar.Event) CalendarEventsInsertCall
-	Delete(calendarId string, eventId string) CalendarEventsDeleteCall
-}
-
-type CalendarEventsInsertCall interface {
-	Do(opts ...googleapi.CallOption) (*calendar.Event, error)
-}
-
-type CalendarEventsDeleteCall interface {
-	Do(opts ...googleapi.CallOption) error
+	Insert(calendarId string, event *calendar.Event) (*calendar.Event, error)
+	Delete(calendarId string, eventId string) error
 }
 
 // implementation
@@ -55,10 +46,10 @@ func (c *calendarEventsService) List(calendarId string, startTime string, endTim
 	}
 	return allEvents, nil
 }
-func (c *calendarEventsService) Insert(calendarId string, event *calendar.Event) CalendarEventsInsertCall {
-	return c.service.Events.Insert(calendarId, event)
+func (c *calendarEventsService) Insert(calendarId string, event *calendar.Event) (*calendar.Event, error) {
+	return c.service.Events.Insert(calendarId, event).Do()
 }
 
-func (c *calendarEventsService) Delete(calendarId string, eventId string) CalendarEventsDeleteCall {
-	return c.service.Events.Delete(calendarId, eventId)
+func (c *calendarEventsService) Delete(calendarId string, eventId string) error {
+	return c.service.Events.Delete(calendarId, eventId).Do()
 }

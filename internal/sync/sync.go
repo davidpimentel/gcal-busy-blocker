@@ -97,7 +97,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) {
 				}
 				fmt.Print(string(b))
 			} else {
-				_, err := s.DestinationCalendarService.Insert("primary", newEvent).Do()
+				_, err := s.DestinationCalendarService.Insert("primary", newEvent)
 				if err != nil {
 					log.Printf("Error creating event: %v", err)
 					continue
@@ -161,11 +161,16 @@ func (s *SyncClient) Clean(dryRun bool) {
 	events := s.fetchBusyBlockEvents("", "")
 
 	for _, event := range events {
+
+		// Sanity check, ensure each event is definitely ours
+		if event.ExtendedProperties.Private[appName] != propertyAppNameValue {
+			log.Fatalf("Aborting, almost deleted an event we weren't supposed to! Event ID = %s", event.Id)
+		}
 		if dryRun {
 			fmt.Printf("DRY RUN - Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
 		} else {
 			fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
-			err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id).Do()
+			err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id)
 			if err != nil {
 				log.Fatalf("Error deleting event %s: %v", event.Id, err)
 			}
