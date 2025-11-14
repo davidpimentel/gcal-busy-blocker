@@ -21,8 +21,8 @@ const (
 
 // Google Calendar permission scopes
 var (
-	sourceScope      = []string{calendar.CalendarReadonlyScope, calendar.CalendarEventsReadonlyScope}
-	destinationScope = []string{calendar.CalendarScope}
+	sourceScope      = []string{calendar.CalendarEventsReadonlyScope}
+	destinationScope = []string{calendar.CalendarEventsScope}
 )
 
 func getOauthConfig(scope []string) *oauth2.Config {
@@ -35,6 +35,7 @@ func getOauthConfig(scope []string) *oauth2.Config {
 	if err != nil {
 		log.Fatalf("unable to parse client secret file to config: %v", err)
 	}
+	config.RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
 	return config
 }
 
