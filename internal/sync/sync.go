@@ -134,7 +134,6 @@ func fetchEvents(calendarService *calendar.Service, startTime string, endTime st
 		eventListCall = eventListCall.PrivateExtendedProperty(fmt.Sprintf("%s=%s", key, value))
 	}
 	allEvents := []*calendar.Event{}
-	eventListCall = eventListCall.MaxResults(2)
 
 	err := eventListCall.Pages(context.Background(), func(events *calendar.Events) error {
 		allEvents = append(allEvents, events.Items...)
