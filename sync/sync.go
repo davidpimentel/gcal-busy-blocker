@@ -24,6 +24,9 @@ const (
 )
 
 func (s *SyncClient) RunSync() {
+	if s.DryRun {
+		fmt.Println("DRY RUN!")
+	}
 	fmt.Println("Starting calendar sync...")
 
 	// Get events from source calendar
@@ -53,7 +56,7 @@ func (s *SyncClient) RunSync() {
 		} else {
 			newEvent := createDestinationEvent(event)
 
-			fmt.Printf("Creating new event: %s\n", newEvent.Summary)
+			fmt.Println("Creating new event")
 
 			if s.DryRun {
 				b, err := json.MarshalIndent(newEvent, "", "  ")
