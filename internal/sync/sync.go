@@ -133,11 +133,18 @@ func fetchEvents(calendarService *calendar.Service, startTime string, endTime st
 	for key, value := range privateProperies {
 		eventListCall = eventListCall.PrivateExtendedProperty(fmt.Sprintf("%s=%s", key, value))
 	}
-	events, err := eventListCall.Do()
+	allEvents := []*calendar.Event{}
+	eventListCall = eventListCall.MaxResults(2)
+
+	err := eventListCall.Pages(context.Background(), func(events *calendar.Events) error {
+		allEvents = append(allEvents, events.Items...)
+		return nil
+	})
+
 	if err != nil {
-		log.Fatalf("Unable to retrieve events from source calendar: %v", err)
+		log.Fatalf("Error fetching events from calendar: %v", err)
 	}
-	return events.Items
+	return allEvents
 }
 
 func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
