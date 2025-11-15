@@ -7,12 +7,11 @@ import (
 	"google.golang.org/api/calendar/v3"
 )
 
-// Mock implementations for testing
 type MockCalendarEventsService struct {
 	events         []*calendar.Event
 	insertedEvents []*calendar.Event
 	deletedEvents  []string
-	listCalls      []listCallParams
+	listCalls      []*listCallParams
 }
 
 type listCallParams struct {
@@ -27,12 +26,12 @@ func NewMockCalendarEventsService(events []*calendar.Event) *MockCalendarEventsS
 		events:         events,
 		insertedEvents: []*calendar.Event{},
 		deletedEvents:  []string{},
-		listCalls:      []listCallParams{},
+		listCalls:      []*listCallParams{},
 	}
 }
 
 func (m *MockCalendarEventsService) List(calendarId string, startTime string, endTime string, privateProperties map[string]string) ([]*calendar.Event, error) {
-	m.listCalls = append(m.listCalls, listCallParams{
+	m.listCalls = append(m.listCalls, &listCallParams{
 		calendarId:        calendarId,
 		startTime:         startTime,
 		endTime:           endTime,
@@ -72,6 +71,75 @@ func createTestEvent(id string, summary string, startTime, endTime time.Time, pr
 	}
 
 	return event
+}
+
+func eventTimesEqual(event *calendar.Event, event2 *calendar.Event) bool {
+	return event.Start.DateTime != event2.Start.DateTime || event.End.DateTime != event2.End.DateTime
+}
+
+func TestRunSync(t *testing.T) {
+	mockSourceService := &MockCalendarEventsService{
+		events: []*calendar.Event{
+			createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
+			createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
+		}}
+	mockDestinationService := &MockCalendarEventsService{}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+
+	syncClient.RunSync(30, false)
+
+	if len(mockSourceService.listCalls) != 1 {
+		t.Errorf("Sync should only call source List once")
+	}
+	if len(mockDestinationService.listCalls) != 1 {
+		t.Errorf("Sync should only call destination List once")
+	}
+
+	for i, event := range mockDestinationService.insertedEvents {
+		sourceEvent := mockSourceService.events[i]
+		if eventTimesEqual(event, sourceEvent) {
+			t.Errorf("start and end times are not the same between source and destination events")
+		}
+
+		if event.ExtendedProperties.Private[appName] != propertyAppNameValue {
+			t.Errorf("appName private property not set for destination event")
+		}
+
+		if event.ExtendedProperties.Private[sourceEventIdPropertyKey] != sourceEvent.Id {
+			t.Errorf("Source Event ID private property not set")
+		}
+	}
+}
+
+func TestRunSyncAlreadyAdded(t *testing.T) {
+	mockEvents := []*calendar.Event{
+		createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
+		createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
+	}
+	mockDestinationEvents := []*calendar.Event{}
+	for _, event := range mockEvents {
+		mockDestinationEvents = append(
+			mockDestinationEvents,
+			createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: event.Id}),
+		)
+	}
+
+	mockSourceService := &MockCalendarEventsService{
+		events: mockEvents}
+	mockDestinationService := &MockCalendarEventsService{events: mockDestinationEvents}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+
+	syncClient.RunSync(30, false)
+
+	if len(mockDestinationService.insertedEvents) != 0 {
+		t.Errorf("An event was inserted when it shouldn't be")
+	}
 }
 
 func TestRunSyncDryRun(t *testing.T) {
