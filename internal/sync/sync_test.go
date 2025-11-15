@@ -143,6 +143,56 @@ func TestRunSyncAlreadyAdded(t *testing.T) {
 	}
 }
 
+func TestRunSyncDeleteOldEvents(t *testing.T) {
+	mockEvents := []*calendar.Event{
+		createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
+		createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
+	}
+	mockDestinationEvents := []*calendar.Event{
+		createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: mockEvents[0].Id}),
+		createTestEvent("def", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: "oldKey"}),
+	}
+
+	mockSourceService := &MockCalendarEventsService{
+		events: mockEvents}
+	mockDestinationService := &MockCalendarEventsService{events: mockDestinationEvents}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+
+	syncClient.RunSync(30, false)
+
+	if len(mockDestinationService.deletedEvents) != 1 || mockDestinationService.deletedEvents[0] != "def" {
+		t.Error("Did not delete old event")
+	}
+}
+
+func TestSyncDoesntDeleteOtherEvents(t *testing.T) {
+	mockEvents := []*calendar.Event{
+		createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
+		createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
+	}
+	mockDestinationEvents := []*calendar.Event{
+		createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: mockEvents[0].Id}),
+		createTestEvent("def", "Busy", time.Now(), time.Now(), map[string]string{sourceEventIdPropertyKey: "oldKey"}),
+	}
+
+	mockSourceService := &MockCalendarEventsService{
+		events: mockEvents}
+	mockDestinationService := &MockCalendarEventsService{events: mockDestinationEvents}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+
+	syncClient.RunSync(30, false)
+
+	if len(mockDestinationService.deletedEvents) != 0 {
+		t.Error("Deleted an event it shouldn't")
+	}
+}
+
 func TestRunSyncDryRun(t *testing.T) {
 	mockSourceService := &MockCalendarEventsService{events: []*calendar.Event{createTestEvent("123", "test summary", time.Now(), time.Now(), nil)}}
 	mockDestinationService := &MockCalendarEventsService{}
@@ -225,6 +275,7 @@ func TestCleanDoesntDeleteOtherEvents(t *testing.T) {
 
 	if err == nil {
 		t.Error("function should have returned an error")
+		return
 	}
 
 	if !strings.HasSuffix(err.Error(), "abc") {
@@ -234,5 +285,38 @@ func TestCleanDoesntDeleteOtherEvents(t *testing.T) {
 	if len(mockDestinationService.deletedEvents) > 0 {
 		t.Error("Delete was called")
 	}
+}
 
+func TestDeleteDestinationEvent(t *testing.T) {
+
+	mockSourceService := &MockCalendarEventsService{}
+	mockDestinationService := &MockCalendarEventsService{}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+	event := createTestEvent("123", "summary", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: "key"})
+
+	syncClient.deleteDestinationEvent(event)
+
+	if len(mockDestinationService.deletedEvents) != 1 {
+		t.Error("did not delete event")
+	}
+}
+
+func TestDeleteDestinationEventDoesntDeleteOtherEvents(t *testing.T) {
+
+	mockSourceService := &MockCalendarEventsService{}
+	mockDestinationService := &MockCalendarEventsService{}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+	event := createTestEvent("123", "summary", time.Now(), time.Now(), map[string]string{})
+
+	syncClient.deleteDestinationEvent(event)
+
+	if len(mockDestinationService.deletedEvents) != 0 {
+		t.Error("Deleted an event it shouldn't")
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/davidpimentel/gcal-busy-blocker/internal/auth"
@@ -61,7 +62,6 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	}
 	log.Println("Starting calendar sync...")
 
-	// Get events from source calendar
 	now := time.Now().Format(time.RFC3339)
 	endTime := time.Now().AddDate(0, 0, daysAhead).Format(time.RFC3339)
 
@@ -106,6 +106,15 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 		}
 	}
 
+	// Remove blocks that don't exist in source calendar anymore
+	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents)
+	for _, event := range oldEvents {
+		err := s.deleteDestinationEvent(event)
+		if err != nil {
+			return err
+		}
+	}
+
 	log.Println("Sync completed successfully")
 	return nil
 }
@@ -124,6 +133,22 @@ func (s *SyncClient) fetchSourceEvents(startTime string, endTime string) []*cale
 		log.Fatalf("Unable to fetch source calendar events: %v", err)
 	}
 	return events
+}
+
+func findOldEvents(sourceEvents []*calendar.Event, destinationEvents []*calendar.Event) []*calendar.Event {
+	sourceEventIds := []string{}
+	for _, event := range sourceEvents {
+		sourceEventIds = append(sourceEventIds, event.Id)
+	}
+
+	oldEvents := []*calendar.Event{}
+
+	for _, destinationEvent := range destinationEvents {
+		if !slices.Contains(sourceEventIds, destinationEvent.ExtendedProperties.Private[sourceEventIdPropertyKey]) {
+			oldEvents = append(oldEvents, destinationEvent)
+		}
+	}
+	return oldEvents
 }
 
 func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
@@ -163,19 +188,28 @@ func (s *SyncClient) Clean(dryRun bool) error {
 
 	for _, event := range events {
 
-		// Sanity check, ensure each event is definitely ours
-		if event.ExtendedProperties.Private[appName] != propertyAppNameValue {
-			return fmt.Errorf("aborting, almost deleted an event we weren't supposed to! Event ID = %s", event.Id)
-		}
 		if dryRun {
 			fmt.Printf("DRY RUN - Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
 		} else {
 			fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
-			err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id)
+			err := s.deleteDestinationEvent(event)
 			if err != nil {
-				return fmt.Errorf("error deleting event %s: %v", event.Id, err)
+				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (s *SyncClient) deleteDestinationEvent(event *calendar.Event) error {
+	// Sanity check, ensure each event is definitely ours
+	if event.ExtendedProperties.Private[appName] != propertyAppNameValue {
+		return fmt.Errorf("aborting, almost deleted an event we weren't supposed to! Event ID = %s", event.Id)
+	}
+
+	err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id)
+	if err != nil {
+		return fmt.Errorf("error deleting event %s: %v", event.Id, err)
 	}
 	return nil
 }
