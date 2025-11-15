@@ -157,14 +157,14 @@ func eventAlreadyExists(destinationEvents []*calendar.Event, sourceEventID strin
 	return false
 }
 
-func (s *SyncClient) Clean(dryRun bool) {
+func (s *SyncClient) Clean(dryRun bool) error {
 	events := s.fetchBusyBlockEvents("", "")
 
 	for _, event := range events {
 
 		// Sanity check, ensure each event is definitely ours
 		if event.ExtendedProperties.Private[appName] != propertyAppNameValue {
-			log.Fatalf("Aborting, almost deleted an event we weren't supposed to! Event ID = %s", event.Id)
+			return fmt.Errorf("aborting, almost deleted an event we weren't supposed to! Event ID = %s", event.Id)
 		}
 		if dryRun {
 			fmt.Printf("DRY RUN - Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
@@ -172,8 +172,9 @@ func (s *SyncClient) Clean(dryRun bool) {
 			fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
 			err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id)
 			if err != nil {
-				log.Fatalf("Error deleting event %s: %v", event.Id, err)
+				return fmt.Errorf("error deleting event %s: %v", event.Id, err)
 			}
 		}
 	}
+	return nil
 }
