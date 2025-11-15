@@ -55,58 +55,59 @@ func NewSyncClient() *SyncClient {
 	}
 }
 
-func (s *SyncClient) RunSync(daysAhead int, dryRun bool) {
+func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	if dryRun {
-		fmt.Println("DRY RUN!")
+		log.Println("DRY RUN!")
 	}
-	fmt.Println("Starting calendar sync...")
+	log.Println("Starting calendar sync...")
 
 	// Get events from source calendar
 	now := time.Now().Format(time.RFC3339)
 	endTime := time.Now().AddDate(0, 0, daysAhead).Format(time.RFC3339)
 
-	fmt.Println("Fetching events from source calendar...")
-	fmt.Printf("Time range: %s to %s\n", now, endTime)
+	log.Println("Fetching events from source calendar...")
+	log.Printf("Time range: %s to %s\n", now, endTime)
 
 	// List events from source calendar
 	sourceEvents := s.fetchSourceEvents(now, endTime)
 
 	if len(sourceEvents) == 0 {
-		fmt.Println("No upcoming events found in source calendar.")
-		return
+		log.Println("No upcoming events found in source calendar.")
+		return nil
 	}
 
-	fmt.Printf("Found %d events in source calendar\n", len(sourceEvents))
+	log.Printf("Found %d events in source calendar\n", len(sourceEvents))
 
 	existingDestinationEvents := s.fetchBusyBlockEvents(now, endTime)
 
 	for _, event := range sourceEvents {
-		fmt.Printf("Event: %s (%s)\n", event.Summary, event.Id)
+		log.Printf("Event: %s (%s)\n", event.Summary, event.Id)
 
 		if eventAlreadyExists(existingDestinationEvents, event.Id) {
-			fmt.Printf("Event already synced: %s\n", event.Id)
+			log.Printf("Event already synced: %s, skipping...\n", event.Id)
 		} else {
 			newEvent := createDestinationEvent(event)
 
-			fmt.Println("Creating new event")
+			log.Println("Creating new event")
 
 			if dryRun {
 				b, err := json.MarshalIndent(newEvent, "", "  ")
 				if err != nil {
-					fmt.Println(err)
+					return err
 				}
-				fmt.Print(string(b))
+				log.Println(string(b))
 			} else {
 				_, err := s.DestinationCalendarService.Insert("primary", newEvent)
 				if err != nil {
 					log.Printf("Error creating event: %v", err)
-					continue
+					return err
 				}
 			}
 		}
 	}
 
-	fmt.Println("Sync completed successfully")
+	log.Println("Sync completed successfully")
+	return nil
 }
 
 func (s *SyncClient) fetchBusyBlockEvents(startTime string, endTime string) []*calendar.Event {

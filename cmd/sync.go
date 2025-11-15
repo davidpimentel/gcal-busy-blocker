@@ -21,7 +21,10 @@ var (
 				log.Fatalf("Error parsing arg dry-run: %v", err)
 			}
 			syncClient := sync.NewSyncClient()
-			syncClient.RunSync(daysAhead, dryRun)
+			err = syncClient.RunSync(daysAhead, dryRun)
+			if err != nil {
+				log.Fatal(err)
+			}
 		},
 	}
 )
