@@ -109,6 +109,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	// Remove blocks that don't exist in source calendar anymore
 	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents)
 	for _, event := range oldEvents {
+		fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
 		err := s.deleteDestinationEvent(event)
 		if err != nil {
 			return err
