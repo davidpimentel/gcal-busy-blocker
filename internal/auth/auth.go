@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -25,8 +26,21 @@ var (
 	destinationScope = []string{calendar.CalendarEventsScope}
 )
 
+func baseConfigPath() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal("cannot find $HOME directory!")
+	}
+	path := filepath.Join(homeDir, ".config", "gcal-busy-blocker")
+	err = os.MkdirAll(path, 0755)
+	if err != nil {
+		log.Fatalf("Cannot make config directory: %s", path)
+	}
+	return path
+}
+
 func getOauthConfig(scope []string) *oauth2.Config {
-	b, err := os.ReadFile(credentialsFile)
+	b, err := os.ReadFile(filepath.Join(baseConfigPath(), credentialsFile))
 	if err != nil {
 		log.Fatalf("Unable to read credentials.json: %v", err)
 	}
@@ -87,7 +101,7 @@ func getTokenFromWeb(tokenFile string, scope []string) {
 }
 
 func tokenFromFile(file string) (*oauth2.Token, error) {
-	f, err := os.Open(file)
+	f, err := os.Open(filepath.Join(baseConfigPath(), file))
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +113,23 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 
 func saveToken(path string, token *oauth2.Token) {
 	fmt.Printf("Saving credential file to: %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	f, err := os.OpenFile(filepath.Join(baseConfigPath(), path), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)
+}
+
+func CopyCredentialsFile(filePath string) error {
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Fatalf("Unable to read credentials.json: %v", err)
+	}
+
+	err = os.WriteFile(filepath.Join(baseConfigPath(), credentialsFile), b, 0600) // 0644 sets file permissions
+	if err != nil {
+		return err
+	}
+	return nil
 }
