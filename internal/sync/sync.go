@@ -62,8 +62,8 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	}
 	log.Println("Starting calendar sync...")
 
-	now := time.Now().Format(time.RFC3339)
-	endTime := time.Now().AddDate(0, 0, daysAhead).Format(time.RFC3339)
+	now := time.Now()
+	endTime := now.AddDate(0, 0, daysAhead)
 
 	log.Println("Fetching events from source calendar...")
 	log.Printf("Time range: %s to %s\n", now, endTime)
@@ -78,7 +78,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 
 	log.Printf("Found %d events in source calendar\n", len(sourceEvents))
 
-	existingDestinationEvents := s.fetchBusyBlockEvents(now, endTime)
+	existingDestinationEvents := s.fetchBusyBlockEvents(endTime)
 
 	for _, event := range sourceEvents {
 		log.Printf("Event: %s (%s)\n", event.Summary, event.Id)
@@ -107,10 +107,9 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	}
 
 	// Remove blocks that don't exist in source calendar anymore
-	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents)
+	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents, now)
 	for _, event := range oldEvents {
-		fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
-		err := s.deleteDestinationEvent(event)
+		err := s.deleteDestinationEvent(event, dryRun)
 		if err != nil {
 			return err
 		}
@@ -120,15 +119,15 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	return nil
 }
 
-func (s *SyncClient) fetchBusyBlockEvents(startTime string, endTime string) []*calendar.Event {
-	events, err := s.DestinationCalendarService.List(defaultCalendar, startTime, endTime, map[string]string{appName: propertyAppNameValue})
+func (s *SyncClient) fetchBusyBlockEvents(endTime time.Time) []*calendar.Event {
+	events, err := s.DestinationCalendarService.List(defaultCalendar, time.Time{}, endTime, map[string]string{appName: propertyAppNameValue})
 	if err != nil {
 		log.Fatalf("Unable to fetch destination calendar events: %v", err)
 	}
 	return events
 }
 
-func (s *SyncClient) fetchSourceEvents(startTime string, endTime string) []*calendar.Event {
+func (s *SyncClient) fetchSourceEvents(startTime time.Time, endTime time.Time) []*calendar.Event {
 	events, err := s.SourceCalendarService.List(defaultCalendar, startTime, endTime, nil)
 	if err != nil {
 		log.Fatalf("Unable to fetch source calendar events: %v", err)
@@ -136,7 +135,7 @@ func (s *SyncClient) fetchSourceEvents(startTime string, endTime string) []*cale
 	return events
 }
 
-func findOldEvents(sourceEvents []*calendar.Event, destinationEvents []*calendar.Event) []*calendar.Event {
+func findOldEvents(sourceEvents []*calendar.Event, destinationEvents []*calendar.Event, startTime time.Time) []*calendar.Event {
 	sourceEventIds := []string{}
 	for _, event := range sourceEvents {
 		sourceEventIds = append(sourceEventIds, event.Id)
@@ -185,32 +184,32 @@ func eventAlreadyExists(destinationEvents []*calendar.Event, sourceEventID strin
 }
 
 func (s *SyncClient) Clean(dryRun bool) error {
-	events := s.fetchBusyBlockEvents("", "")
+	events := s.fetchBusyBlockEvents(time.Time{})
 
 	for _, event := range events {
-
-		if dryRun {
-			fmt.Printf("DRY RUN - Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
-		} else {
-			fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
-			err := s.deleteDestinationEvent(event)
-			if err != nil {
-				return err
-			}
+		err := s.deleteDestinationEvent(event, dryRun)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func (s *SyncClient) deleteDestinationEvent(event *calendar.Event) error {
+func (s *SyncClient) deleteDestinationEvent(event *calendar.Event, dryRun bool) error {
 	// Sanity check, ensure each event is definitely ours
 	if event.ExtendedProperties.Private[appName] != propertyAppNameValue {
 		return fmt.Errorf("aborting, almost deleted an event we weren't supposed to! Event ID = %s", event.Id)
 	}
 
-	err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id)
-	if err != nil {
-		return fmt.Errorf("error deleting event %s: %v", event.Id, err)
+	if dryRun {
+		fmt.Printf("DRY RUN - Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
+	} else {
+		fmt.Printf("Deleting event at %s - %s\n", event.Start.DateTime, event.End.DateTime)
+
+		err := s.DestinationCalendarService.Delete(defaultCalendar, event.Id)
+		if err != nil {
+			return fmt.Errorf("error deleting event %s: %v", event.Id, err)
+		}
 	}
 	return nil
 }

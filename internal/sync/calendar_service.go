@@ -3,12 +3,13 @@ package sync
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"google.golang.org/api/calendar/v3"
 )
 
 type CalendarEventsService interface {
-	List(calendarId string, startTime string, endTime string, privateProperties map[string]string) ([]*calendar.Event, error)
+	List(calendarId string, startTime time.Time, endTime time.Time, privateProperties map[string]string) ([]*calendar.Event, error)
 	Insert(calendarId string, event *calendar.Event) (*calendar.Event, error)
 	Delete(calendarId string, eventId string) error
 }
@@ -18,17 +19,17 @@ type calendarEventsService struct {
 	service *calendar.Service
 }
 
-func (c *calendarEventsService) List(calendarId string, startTime string, endTime string, privateProperties map[string]string) ([]*calendar.Event, error) {
+func (c *calendarEventsService) List(calendarId string, startTime time.Time, endTime time.Time, privateProperties map[string]string) ([]*calendar.Event, error) {
 	eventListCall := c.service.Events.List(calendarId).
 		SingleEvents(true).
 		OrderBy("startTime")
 
-	if startTime != "" {
-		eventListCall = eventListCall.TimeMin(startTime)
+	if !startTime.IsZero() {
+		eventListCall = eventListCall.TimeMin(startTime.Format(time.RFC3339))
 	}
 
-	if endTime != "" {
-		eventListCall = eventListCall.TimeMax(endTime)
+	if !endTime.IsZero() {
+		eventListCall = eventListCall.TimeMax(endTime.Format(time.RFC3339))
 	}
 
 	for key, value := range privateProperties {
