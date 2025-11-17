@@ -8,8 +8,13 @@ Keep your meeting availability up to date on your work Google Calendar by creati
 
 - Create a new GCP project
 - Enable the Google Calendar api
-- Create Oauth credentials (desktop type). Save the json file as credentials.json in this repo
+- Create Oauth credentials (desktop type). Save the json file
 - Important! - Complete the Oauth consent screen, and add both your personal and work emails as test users under the audience section
+
+### Installation
+
+- Run `go install github.com/davidpimentel/gcal-busy-blocker@latest`
+- Run `gcal-busy-blocker set-oauth-credentials -p /path/to/credentials`
 
 ### Autenticate your accounts
 
