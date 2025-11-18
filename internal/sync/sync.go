@@ -64,7 +64,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	now := time.Now()
 	endTime := now.AddDate(0, 0, daysAhead)
 
-	log.Printf("Starting calendar syn for time range: %s to %s\n", now, endTime)
+	log.Printf("Starting calendar sync for time range: %s to %s\n", now, endTime)
 
 	// List events from source calendar
 	sourceEvents := s.fetchSourceEvents(now, endTime)
