@@ -60,41 +60,40 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	if dryRun {
 		log.Println("DRY RUN!")
 	}
-	log.Println("Starting calendar sync...")
 
 	now := time.Now()
 	endTime := now.AddDate(0, 0, daysAhead)
 
-	log.Println("Fetching events from source calendar...")
-	log.Printf("Time range: %s to %s\n", now, endTime)
+	log.Printf("Starting calendar syn for time range: %s to %s\n", now, endTime)
 
 	// List events from source calendar
 	sourceEvents := s.fetchSourceEvents(now, endTime)
 
 	if len(sourceEvents) == 0 {
-		log.Println("No upcoming events found in source calendar.")
+		log.Println("No upcoming events found in source calendar, terminating...")
 		return nil
 	}
 
-	log.Printf("Found %d events in source calendar\n", len(sourceEvents))
+	sourceEventCount := len(sourceEvents)
+	skippedEvents := 0
+	eventsCreated := 0
+	deletedEvents := 0
 
 	existingDestinationEvents := s.fetchBusyBlockEvents(endTime)
 
 	for _, event := range sourceEvents {
-		log.Printf("Event: %s (%s)\n", event.Summary, event.Id)
-
 		if eventAlreadyExists(existingDestinationEvents, event.Id) {
-			log.Printf("Event already synced: %s, skipping...\n", event.Id)
+			skippedEvents++
 		} else {
+			eventsCreated++
 			newEvent := createDestinationEvent(event)
-
-			log.Println("Creating new event")
 
 			if dryRun {
 				b, err := json.MarshalIndent(newEvent, "", "  ")
 				if err != nil {
 					return err
 				}
+				log.Println("Dry Run:")
 				log.Println(string(b))
 			} else {
 				_, err := s.DestinationCalendarService.Insert("primary", newEvent)
@@ -106,9 +105,10 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 		}
 	}
 
-	// Remove blocks that don't exist in source calendar anymore
+	// Remove blocks that don't exist in source calendar anymore, or are in the past
 	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents, now)
 	for _, event := range oldEvents {
+		deletedEvents++
 		err := s.deleteDestinationEvent(event, dryRun)
 		if err != nil {
 			return err
@@ -116,6 +116,13 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	}
 
 	log.Println("Sync completed successfully")
+	log.Printf(
+		"Source events scanned: %d\nEvents skipped: %d\nEvents added: %d\nEvents deleted: %d",
+		sourceEventCount,
+		skippedEvents,
+		eventsCreated,
+		deletedEvents,
+	)
 	return nil
 }
 
