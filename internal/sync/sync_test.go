@@ -116,15 +116,17 @@ func TestRunSync(t *testing.T) {
 }
 
 func TestRunSyncAlreadyAdded(t *testing.T) {
+	startTime := time.Now()
+	endTime := startTime.Add(time.Hour)
 	mockEvents := []*calendar.Event{
-		createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
-		createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
+		createTestEvent("123", "test summary", startTime, endTime, nil),
+		createTestEvent("456", "test summary2", startTime, endTime, nil),
 	}
 	mockDestinationEvents := []*calendar.Event{}
 	for _, event := range mockEvents {
 		mockDestinationEvents = append(
 			mockDestinationEvents,
-			createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: event.Id}),
+			createTestEvent("abc", "Busy", startTime, endTime, map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: event.Id}),
 		)
 	}
 
@@ -144,13 +146,15 @@ func TestRunSyncAlreadyAdded(t *testing.T) {
 }
 
 func TestRunSyncDeleteOldEvents(t *testing.T) {
+	startTime := time.Now()
+	endTime := startTime.Add(time.Hour)
 	mockEvents := []*calendar.Event{
-		createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
-		createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
+		createTestEvent("123", "test summary", startTime, endTime, nil),
+		createTestEvent("456", "test summary2", startTime, endTime, nil),
 	}
 	mockDestinationEvents := []*calendar.Event{
 		createTestEvent("123", "Busy", time.Now().AddDate(0, 0, -1), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: "old key"}),
-		createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: mockEvents[0].Id}),
+		createTestEvent("abc", "Busy", startTime, endTime, map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: mockEvents[0].Id}),
 		createTestEvent("def", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: "oldKey"}),
 	}
 
@@ -174,12 +178,14 @@ func TestRunSyncDeleteOldEvents(t *testing.T) {
 }
 
 func TestSyncDoesntDeleteOtherEvents(t *testing.T) {
+	startTime := time.Now()
+	endTime := startTime.Add(time.Hour)
 	mockEvents := []*calendar.Event{
-		createTestEvent("123", "test summary", time.Now(), time.Now().Add(time.Hour), nil),
+		createTestEvent("123", "test summary", startTime, endTime, nil),
 		createTestEvent("456", "test summary2", time.Now(), time.Now(), nil),
 	}
 	mockDestinationEvents := []*calendar.Event{
-		createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: mockEvents[0].Id}),
+		createTestEvent("abc", "Busy", startTime, endTime, map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: mockEvents[0].Id}),
 		createTestEvent("def", "Busy", time.Now(), time.Now(), map[string]string{sourceEventIdPropertyKey: "oldKey"}),
 	}
 
@@ -195,6 +201,27 @@ func TestSyncDoesntDeleteOtherEvents(t *testing.T) {
 
 	if len(mockDestinationService.deletedEvents) != 0 {
 		t.Error("Deleted an event it shouldn't")
+	}
+}
+
+func TestRunSyncDeleteAndRecreateMovedEvents(t *testing.T) {
+	eventStart := time.Now()
+	eventEnd := eventStart.Add(time.Hour)
+	mockSourceService := &MockCalendarEventsService{events: []*calendar.Event{createTestEvent("123", "test summary", eventStart, eventEnd, nil)}}
+	mockDestinationService := &MockCalendarEventsService{
+		events: []*calendar.Event{
+			createTestEvent("abc", "Busy", time.Now(), time.Now(), map[string]string{appName: propertyAppNameValue, sourceEventIdPropertyKey: "123"}),
+		},
+	}
+	syncClient := &SyncClient{
+		SourceCalendarService:      mockSourceService,
+		DestinationCalendarService: mockDestinationService,
+	}
+
+	syncClient.RunSync(30, false)
+
+	if len(mockDestinationService.insertedEvents) != 1 && len(mockDestinationService.deletedEvents) != 1 {
+		t.Error("Expected event to be deleted and recreated because of time adjustment")
 	}
 }
 

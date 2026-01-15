@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"slices"
 	"time"
 
 	"github.com/davidpimentel/gcal-busy-blocker/internal/auth"
@@ -82,7 +81,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	existingDestinationEvents := s.fetchBusyBlockEvents(endTime)
 
 	for _, event := range sourceEvents {
-		if eventAlreadyExists(existingDestinationEvents, event.Id) {
+		if eventAlreadyExists(existingDestinationEvents, event) {
 			skippedEvents++
 		} else {
 			eventsCreated++
@@ -106,7 +105,7 @@ func (s *SyncClient) RunSync(daysAhead int, dryRun bool) error {
 	}
 
 	// Remove blocks that don't exist in source calendar anymore, or are in the past
-	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents, now)
+	oldEvents := findOldEvents(sourceEvents, existingDestinationEvents)
 	for _, event := range oldEvents {
 		deletedEvents++
 		err := s.deleteDestinationEvent(event, dryRun)
@@ -142,16 +141,17 @@ func (s *SyncClient) fetchSourceEvents(startTime time.Time, endTime time.Time) [
 	return events
 }
 
-func findOldEvents(sourceEvents []*calendar.Event, destinationEvents []*calendar.Event, startTime time.Time) []*calendar.Event {
-	sourceEventIds := []string{}
+func findOldEvents(sourceEvents []*calendar.Event, destinationEvents []*calendar.Event) []*calendar.Event {
+	sourceEventLookup := map[string]*calendar.Event{}
 	for _, event := range sourceEvents {
-		sourceEventIds = append(sourceEventIds, event.Id)
+		sourceEventLookup[event.Id] = event
 	}
 
 	oldEvents := []*calendar.Event{}
 
 	for _, destinationEvent := range destinationEvents {
-		if !slices.Contains(sourceEventIds, destinationEvent.ExtendedProperties.Private[sourceEventIdPropertyKey]) {
+		if sourceEvent := sourceEventLookup[destinationEvent.ExtendedProperties.Private[sourceEventIdPropertyKey]]; sourceEvent == nil ||
+			!startAndEndTimesEqual(sourceEvent, destinationEvent) {
 			oldEvents = append(oldEvents, destinationEvent)
 		}
 	}
@@ -179,10 +179,11 @@ func createDestinationEvent(sourceEvent *calendar.Event) *calendar.Event {
 	}
 }
 
-func eventAlreadyExists(destinationEvents []*calendar.Event, sourceEventID string) bool {
+func eventAlreadyExists(destinationEvents []*calendar.Event, sourceEvent *calendar.Event) bool {
 	for _, event := range destinationEvents {
 		if event.ExtendedProperties != nil && event.ExtendedProperties.Private != nil {
-			if event.ExtendedProperties.Private[sourceEventIdPropertyKey] == sourceEventID {
+			if event.ExtendedProperties.Private[sourceEventIdPropertyKey] == sourceEvent.Id &&
+				startAndEndTimesEqual(sourceEvent, event) {
 				return true
 			}
 		}
@@ -219,4 +220,8 @@ func (s *SyncClient) deleteDestinationEvent(event *calendar.Event, dryRun bool) 
 		}
 	}
 	return nil
+}
+
+func startAndEndTimesEqual(eventA *calendar.Event, eventB *calendar.Event) bool {
+	return eventA.Start.DateTime == eventB.Start.DateTime && eventA.End.DateTime == eventB.End.DateTime
 }
